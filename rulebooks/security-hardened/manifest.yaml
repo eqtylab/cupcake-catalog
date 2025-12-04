@@ -1,0 +1,37 @@
+apiVersion: cupcake.dev/v1
+kind: Rulebook
+
+metadata:
+  name: security-hardened
+  version: 0.1.0
+  description: |
+    Production-ready security policies that protect against common dangerous
+    operations while maintaining developer productivity. Includes protection
+    against destructive commands, dangerous flags, and sensitive path access.
+
+  harnesses:
+    - claude
+    - cursor
+    - opencode
+    - factory
+
+  keywords:
+    - security
+    - production
+    - enterprise
+    - hardening
+    - standards
+
+  license: Apache-2.0
+
+  maintainers:
+    - name: EQTY Lab
+      email: support@eqtylab.io
+      url: https://eqtylab.io
+
+  homepage: https://catalog.cupcake.dev/rulebooks/security-hardened
+  repository: https://github.com/eqtylab/cupcake-catalog
+
+spec:
+  cupcakeVersion: ">=0.5.0"
+  deprecated: false
