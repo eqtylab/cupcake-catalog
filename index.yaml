@@ -4,7 +4,7 @@
 
 apiVersion: cupcake.dev/v1
 kind: CatalogIndex
-generated: '2025-12-04T17:38:44.459619+00:00'
+generated: '2025-12-04T18:57:22.708067+00:00'
 entries:
   security-hardened:
   - name: security-hardened
@@ -24,5 +24,6 @@ entries:
     - production
     - enterprise
     - hardening
+    - standards
     deprecated: false
-    created: '2025-12-04T17:38:44.459444+00:00'
+    created: '2025-12-04T18:57:22.708044+00:00'
