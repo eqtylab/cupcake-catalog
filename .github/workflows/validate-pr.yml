@@ -48,8 +48,25 @@ jobs:
           for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
             echo "Checking Rego syntax: $rulebook"
             if [ -d "rulebooks/$rulebook/policies" ]; then
+              # Check formatting for all policies and helpers
               opa fmt --diff "rulebooks/$rulebook/policies/"
-              opa check "rulebooks/$rulebook/policies/"
+              if [ -d "rulebooks/$rulebook/helpers" ]; then
+                opa fmt --diff "rulebooks/$rulebook/helpers/"
+              fi
+              
+              # Check each harness directory separately to avoid
+              # METADATA annotation conflicts across harnesses
+              # Include helpers directory for shared functions
+              for harness in claude cursor factory opencode; do
+                if [ -d "rulebooks/$rulebook/policies/$harness" ]; then
+                  echo "  Checking harness: $harness"
+                  if [ -d "rulebooks/$rulebook/helpers" ]; then
+                    opa check "rulebooks/$rulebook/policies/$harness/" "rulebooks/$rulebook/helpers/"
+                  else
+                    opa check "rulebooks/$rulebook/policies/$harness/"
+                  fi
+                fi
+              done
             fi
           done
 
