@@ -1,0 +1,123 @@
+name: Release Rulebook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rulebooks/**"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Get changed rulebooks
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD | grep '^rulebooks/' | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          echo "rulebooks=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Changed rulebooks: $CHANGED"
+
+      - name: Package and release rulebooks
+        if: steps.changed.outputs.rulebooks != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
+            echo "Processing: $rulebook"
+            
+            # Get version from manifest
+            VERSION=$(python -c "
+          import yaml
+          with open('rulebooks/$rulebook/manifest.yaml') as f:
+              m = yaml.safe_load(f)
+          print(m['metadata']['version'])
+          ")
+            
+            TAG="${rulebook}-${VERSION}"
+            TARBALL="${rulebook}-${VERSION}.tar.gz"
+            
+            echo "Version: $VERSION"
+            echo "Tag: $TAG"
+            
+            # Check if release already exists
+            if gh release view "$TAG" &>/dev/null; then
+              echo "Release $TAG already exists, skipping"
+              continue
+            fi
+            
+            # Create tarball
+            echo "Creating tarball: $TARBALL"
+            tar -czvf "$TARBALL" -C rulebooks "$rulebook"
+            
+            # Calculate SHA256
+            DIGEST=$(sha256sum "$TARBALL" | cut -d' ' -f1)
+            echo "SHA256: $DIGEST"
+            
+            # Get description from manifest
+            DESCRIPTION=$(python -c "
+          import yaml
+          with open('rulebooks/$rulebook/manifest.yaml') as f:
+              m = yaml.safe_load(f)
+          desc = m['metadata'].get('description', '')
+          print(desc.strip()[:200])
+          ")
+            
+            # Create release
+            echo "Creating GitHub release: $TAG"
+            gh release create "$TAG" \
+              --title "$rulebook v$VERSION" \
+              --notes "## $rulebook v$VERSION
+
+          $DESCRIPTION
+
+          ### Installation
+
+          \`\`\`bash
+          cupcake catalog install $rulebook@$VERSION
+          \`\`\`
+
+          ### Checksum
+
+          \`\`\`
+          SHA256: $DIGEST
+          \`\`\`" \
+              "$TARBALL"
+            
+            echo "Released: $TAG"
+          done
+
+      - name: Regenerate index.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Regenerating catalog index..."
+          python scripts/generate-index.py
+
+      - name: Commit and push index.yaml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet index.yaml; then
+            echo "No changes to index.yaml"
+          else
+            git add index.yaml
+            git commit -m "chore: regenerate catalog index [skip ci]"
+            git push
+          fi

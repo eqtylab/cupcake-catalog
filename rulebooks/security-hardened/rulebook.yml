@@ -1,0 +1,20 @@
+# security-hardened rulebook configuration
+# This is merged additively with user's rulebook.yml
+# User configuration takes precedence for conflicts
+
+# No signals required for this rulebook
+# All policy logic is self-contained
+signals: {}
+
+# Actions triggered by rule decisions
+actions:
+  by_rule_id:
+    CATALOG-SEC-001:
+      # Log critical security blocks
+      - command: "echo '[SECURITY] Blocked dangerous command' >> .cupcake/security.log"
+    CATALOG-SEC-002:
+      - command: "echo '[SECURITY] Blocked dangerous flags' >> .cupcake/security.log"
+
+# No builtins enabled by default
+# Users can enable builtins in their own rulebook.yml
+builtins: {}

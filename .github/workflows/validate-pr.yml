@@ -1,0 +1,119 @@
+name: Validate PR
+
+on:
+  pull_request:
+    paths:
+      - "rulebooks/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
+      - name: Get changed rulebooks
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep '^rulebooks/' | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          echo "rulebooks=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Changed rulebooks: $CHANGED"
+
+      - name: Validate manifest schema
+        if: steps.changed.outputs.rulebooks != ''
+        run: |
+          for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
+            echo "Validating rulebook: $rulebook"
+            python scripts/validate-rulebook.py "rulebooks/$rulebook"
+          done
+
+      - name: Check Rego syntax
+        if: steps.changed.outputs.rulebooks != ''
+        run: |
+          for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
+            echo "Checking Rego syntax: $rulebook"
+            if [ -d "rulebooks/$rulebook/policies" ]; then
+              opa fmt --diff "rulebooks/$rulebook/policies/"
+              opa check "rulebooks/$rulebook/policies/"
+            fi
+          done
+
+      - name: Validate package namespaces
+        if: steps.changed.outputs.rulebooks != ''
+        run: |
+          for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
+            echo "Validating namespaces: $rulebook"
+            python scripts/validate-namespace.py "rulebooks/$rulebook"
+          done
+
+      - name: Check version bump
+        if: steps.changed.outputs.rulebooks != ''
+        run: |
+          for rulebook in ${{ steps.changed.outputs.rulebooks }}; do
+            echo "Checking version: $rulebook"
+            
+            # Get current version from manifest
+            CURRENT_VERSION=$(python -c "
+          import yaml
+          with open('rulebooks/$rulebook/manifest.yaml') as f:
+              m = yaml.safe_load(f)
+          print(m['metadata']['version'])
+          ")
+            
+            # Get previous version from base branch (if manifest existed)
+            git show "${{ github.event.pull_request.base.sha }}:rulebooks/$rulebook/manifest.yaml" > /tmp/old_manifest.yaml 2>/dev/null || true
+            
+            if [ -f /tmp/old_manifest.yaml ] && [ -s /tmp/old_manifest.yaml ]; then
+              OLD_VERSION=$(python -c "
+          import yaml
+          with open('/tmp/old_manifest.yaml') as f:
+              m = yaml.safe_load(f)
+          print(m['metadata']['version'])
+          " 2>/dev/null || echo "0.0.0")
+              
+              echo "Previous version: $OLD_VERSION"
+              echo "Current version: $CURRENT_VERSION"
+              
+              # Compare versions (simple string comparison, could be improved)
+              if [ "$CURRENT_VERSION" = "$OLD_VERSION" ]; then
+                echo "ERROR: Version must be bumped for changes to $rulebook"
+                exit 1
+              fi
+            else
+              echo "New rulebook, version: $CURRENT_VERSION"
+            fi
+          done
+
+  lint-rego:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Lint all Rego files
+        run: |
+          # Find all .rego files and check formatting
+          find rulebooks -name "*.rego" -type f | while read -r file; do
+            echo "Checking: $file"
+            opa fmt --diff "$file" || exit 1
+          done
