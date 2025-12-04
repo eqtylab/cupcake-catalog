@@ -20,6 +20,7 @@ metadata:
     - production
     - enterprise
     - hardening
+    - standards
 
   license: Apache-2.0
 
