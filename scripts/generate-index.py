@@ -25,8 +25,8 @@ from pathlib import Path
 import yaml
 
 
-def get_github_releases() -> dict:
-    """Get all GitHub releases using gh CLI."""
+def get_release_tags() -> list[str]:
+    """Get all release tags using gh CLI."""
     try:
         result = subprocess.run(
             [
@@ -34,7 +34,7 @@ def get_github_releases() -> dict:
                 "release",
                 "list",
                 "--json",
-                "tagName,createdAt,assets",
+                "tagName",
                 "--limit",
                 "100",
             ],
@@ -43,10 +43,35 @@ def get_github_releases() -> dict:
             check=True,
         )
         releases = json.loads(result.stdout) if result.stdout else []
-        return {r["tagName"]: r for r in releases}
+        return [r["tagName"] for r in releases]
     except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError):
         # gh CLI not available or not authenticated
-        return {}
+        return []
+
+
+def get_release_info(tag: str) -> dict | None:
+    """Get detailed release info for a specific tag using gh CLI.
+
+    Uses 'gh release view' which provides asset details including
+    download URLs and digests.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "release",
+                "view",
+                tag,
+                "--json",
+                "tagName,createdAt,assets",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(result.stdout) if result.stdout else None
+    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError):
+        return None
 
 
 def calculate_digest(tarball_path: Path) -> str:
@@ -90,7 +115,10 @@ def generate_index() -> dict:
     """Generate the catalog index from all rulebooks."""
     repo_root = Path(__file__).parent.parent
     rulebooks_dir = repo_root / "rulebooks"
-    releases = get_github_releases()
+
+    # Get list of available release tags
+    release_tags = set(get_release_tags())
+    print(f"Found {len(release_tags)} release(s) on GitHub")
 
     entries: dict[str, list] = {}
 
@@ -133,24 +161,43 @@ def generate_index() -> dict:
             "deprecated": spec.get("deprecated", False),
         }
 
-        # Add release info if available
-        release = releases.get(tag, {})
-        if release:
-            entry["created"] = release.get(
-                "createdAt", datetime.now(timezone.utc).isoformat()
-            )
+        # Add release info if available (using gh release view for full details)
+        if tag in release_tags:
+            release = get_release_info(tag)
+            if release:
+                entry["created"] = release.get(
+                    "createdAt", datetime.now(timezone.utc).isoformat()
+                )
 
-            # Find tarball asset
-            assets = release.get("assets", [])
-            tarball = next(
-                (a for a in assets if a.get("name", "").endswith(".tar.gz")), None
-            )
-            if tarball:
-                entry["urls"] = [tarball.get("url", "")]
-                # Note: Would need to download to calculate actual digest
-                entry["digest"] = f"sha256:{hashlib.sha256(tag.encode()).hexdigest()}"
+                # Find tarball asset - gh release view provides full asset details
+                assets = release.get("assets", [])
+                tarball = next(
+                    (a for a in assets if a.get("name", "").endswith(".tar.gz")), None
+                )
+                if tarball:
+                    # Use the download URL from the asset
+                    entry["urls"] = [tarball.get("url", "")]
+                    # Use the digest from GitHub if available, otherwise generate placeholder
+                    if tarball.get("digest"):
+                        entry["digest"] = tarball["digest"]
+                    else:
+                        entry["digest"] = (
+                            f"sha256:{hashlib.sha256(tag.encode()).hexdigest()}"
+                        )
+                    print(f"  Found release assets for {tag}")
+                else:
+                    print(
+                        f"  WARNING: No tarball asset found for {tag}", file=sys.stderr
+                    )
+            else:
+                entry["created"] = datetime.now(timezone.utc).isoformat()
+                print(
+                    f"  WARNING: Could not fetch release info for {tag}",
+                    file=sys.stderr,
+                )
         else:
             entry["created"] = datetime.now(timezone.utc).isoformat()
+            print(f"  INFO: No release found for {tag} (will be created on merge)")
 
         # Add to entries
         if name not in entries:
