@@ -3,7 +3,7 @@ kind: Rulebook
 
 metadata:
   name: security-hardened
-  version: 0.1.1
+  version: 0.1.2
   description: |
     Production-ready security policies that protect against common dangerous
     operations while maintaining developer productivity. Includes protection

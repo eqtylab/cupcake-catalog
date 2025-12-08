@@ -13,7 +13,7 @@ evaluate := {
 	"denials": collect_verbs("deny"),
 	"blocks": collect_verbs("block"),
 	"asks": collect_verbs("ask"),
-	"allow_overrides": collect_verbs("allow_override"),
+	"modifications": collect_verbs("modify"),
 	"add_context": collect_verbs("add_context"),
 }
 
