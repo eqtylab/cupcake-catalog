@@ -4,29 +4,29 @@
 
 apiVersion: cupcake.dev/v1
 kind: CatalogIndex
-generated: "2025-12-05T15:52:05.416854+00:00"
+generated: '2025-12-08T16:43:26.360420+00:00'
 entries:
   security-hardened:
-    - name: security-hardened
-      version: 0.1.0
-      description: "Production-ready security policies that protect against common dangerous
+  - name: security-hardened
+    version: 0.1.1
+    description: 'Production-ready security policies that protect against common dangerous
 
-        operations while maintaining developer productivity. Includes protection
+      operations while maintaining developer productivity. Includes protection
 
-        against destructive commands, dangerous flags, and sensitive path access."
-      harnesses:
-        - claude
-        - cursor
-        - opencode
-        - factory
-      keywords:
-        - security
-        - production
-        - enterprise
-        - hardening
-        - standards
-      deprecated: false
-      created: "2025-12-04T18:57:06Z"
-      urls:
-        - https://github.com/eqtylab/cupcake-catalog/releases/download/security-hardened-0.1.0/security-hardened-0.1.0.tar.gz
-      digest: sha256:913c5b61f3edc151fb21309a833f920ba9565a36ed694dfa3ae3bcc0483f5c54
+      against destructive commands, dangerous flags, and sensitive path access.'
+    harnesses:
+    - claude
+    - cursor
+    - opencode
+    - factory
+    keywords:
+    - security
+    - production
+    - enterprise
+    - hardening
+    - standards
+    deprecated: false
+    created: '2025-12-08T16:43:06Z'
+    urls:
+    - https://github.com/eqtylab/cupcake-catalog/releases/download/security-hardened-0.1.1/security-hardened-0.1.1.tar.gz
+    digest: sha256:cbd468873eb5b949796369d9fd09ba0928cd2285220acc2f69a2070afab2d06a
