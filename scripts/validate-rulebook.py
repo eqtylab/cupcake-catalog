@@ -6,7 +6,7 @@ This script validates:
 1. manifest.yaml schema compliance
 2. Required files exist (README.md)
 3. Policy directories exist for declared harnesses
-4. system/evaluate.rego exists for each harness
+4. system/evaluate.rego exists at rulebook root (shared entrypoint)
 
 Usage:
     python scripts/validate-rulebook.py rulebooks/my-rulebook
@@ -123,17 +123,22 @@ def validate_structure(rulebook_path: Path, harnesses: list[str]) -> list[str]:
         errors.append("policies/ directory is required")
         return errors  # Can't continue without policies
 
-    # Check each declared harness
+    # Check system/evaluate.rego at root level (shared across all harnesses)
+    evaluate_path = rulebook_path / "system" / "evaluate.rego"
+    if not evaluate_path.exists():
+        errors.append("Missing system/evaluate.rego at rulebook root")
+
+    # Check each declared harness has a policy directory
     for harness in harnesses:
         harness_dir = policies_dir / harness
         if not harness_dir.exists():
             errors.append(f"Missing policies/{harness}/ directory for declared harness")
             continue
 
-        # Check system/evaluate.rego
-        evaluate_path = harness_dir / "system" / "evaluate.rego"
-        if not evaluate_path.exists():
-            errors.append(f"Missing policies/{harness}/system/evaluate.rego")
+        # Check that harness directory has at least one .rego file
+        rego_files = list(harness_dir.glob("*.rego"))
+        if not rego_files:
+            errors.append(f"No .rego policy files in policies/{harness}/")
 
     return errors
 

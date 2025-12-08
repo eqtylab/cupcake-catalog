@@ -3,8 +3,9 @@
 Validate that all Rego policies use the correct namespace.
 
 Catalog policies MUST use the namespace pattern:
-    cupcake.catalog.<rulebook_name>.policies.*
-    cupcake.catalog.<rulebook_name>.system
+    cupcake.catalog.<rulebook_name>.policies.*  (for policies/<harness>/*.rego)
+    cupcake.catalog.<rulebook_name>.helpers.*   (for helpers/*.rego)
+    cupcake.catalog.<rulebook_name>.system      (for system/evaluate.rego)
 
 This script validates:
 1. All .rego files have package declarations
@@ -102,6 +103,68 @@ def validate_policy_file(
     return errors
 
 
+def validate_helper_file(
+    helper_path: Path, expected_prefix: str, rulebook_path: Path
+) -> list[str]:
+    """Validate a helper file's namespace. Returns list of errors."""
+    errors = []
+
+    try:
+        content = helper_path.read_text()
+    except OSError as e:
+        return [f"Cannot read {helper_path}: {e}"]
+
+    # Find package declaration
+    match = PACKAGE_PATTERN.search(content)
+    if not match:
+        errors.append(
+            f"{helper_path.relative_to(rulebook_path)}: No package declaration found"
+        )
+        return errors
+
+    package = match.group(1)
+
+    # Helper files must use helpers namespace
+    if not package.startswith(expected_prefix):
+        errors.append(
+            f"{helper_path.relative_to(rulebook_path)}: "
+            f"Package '{package}' must start with '{expected_prefix}'"
+        )
+
+    return errors
+
+
+def validate_system_file(
+    system_path: Path, expected_package: str, rulebook_path: Path
+) -> list[str]:
+    """Validate a system file's namespace. Returns list of errors."""
+    errors = []
+
+    try:
+        content = system_path.read_text()
+    except OSError as e:
+        return [f"Cannot read {system_path}: {e}"]
+
+    # Find package declaration
+    match = PACKAGE_PATTERN.search(content)
+    if not match:
+        errors.append(
+            f"{system_path.relative_to(rulebook_path)}: No package declaration found"
+        )
+        return errors
+
+    package = match.group(1)
+
+    # System files must use exact system namespace
+    if package != expected_package:
+        errors.append(
+            f"{system_path.relative_to(rulebook_path)}: "
+            f"Package '{package}' must be exactly '{expected_package}'"
+        )
+
+    return errors
+
+
 def validate_namespace(rulebook_path: Path) -> list[str]:
     """Validate all policy files in a rulebook. Returns list of errors."""
     errors = []
@@ -112,20 +175,46 @@ def validate_namespace(rulebook_path: Path) -> list[str]:
         return ["Cannot determine rulebook name from manifest.yaml"]
 
     normalized_name = normalize_name(name)
-    expected_prefix = f"cupcake.catalog.{normalized_name}.policies"
+    expected_policies_prefix = f"cupcake.catalog.{normalized_name}.policies"
+    expected_helpers_prefix = f"cupcake.catalog.{normalized_name}.helpers"
+    expected_system_package = f"cupcake.catalog.{normalized_name}.system"
 
-    # Find all .rego files
+    # Find all .rego files in policies/
     policies_dir = rulebook_path / "policies"
     if not policies_dir.exists():
         return ["No policies/ directory found"]
 
-    rego_files = list(policies_dir.rglob("*.rego"))
-    if not rego_files:
+    policy_files = list(policies_dir.rglob("*.rego"))
+    if not policy_files:
         return ["No .rego files found in policies/"]
 
-    # Validate each file
-    for policy_path in rego_files:
-        errors.extend(validate_policy_file(policy_path, expected_prefix, rulebook_path))
+    # Validate each policy file
+    for policy_path in policy_files:
+        errors.extend(
+            validate_policy_file(policy_path, expected_policies_prefix, rulebook_path)
+        )
+
+    # Validate helper files (if helpers/ directory exists)
+    helpers_dir = rulebook_path / "helpers"
+    if helpers_dir.exists():
+        helper_files = list(helpers_dir.rglob("*.rego"))
+        for helper_path in helper_files:
+            errors.extend(
+                validate_helper_file(
+                    helper_path, expected_helpers_prefix, rulebook_path
+                )
+            )
+
+    # Validate system files (if system/ directory exists)
+    system_dir = rulebook_path / "system"
+    if system_dir.exists():
+        system_files = list(system_dir.rglob("*.rego"))
+        for system_path in system_files:
+            errors.extend(
+                validate_system_file(
+                    system_path, expected_system_package, rulebook_path
+                )
+            )
 
     return errors
 
