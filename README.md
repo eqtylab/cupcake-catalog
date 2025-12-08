@@ -70,7 +70,15 @@ Catalog rulebooks are installed as **overlays** in `.cupcake/catalog/`. They nev
 │   └── security-hardened/
 │       ├── manifest.yaml
 │       ├── rulebook.yml
+│       ├── system/
+│       │   └── evaluate.rego   # Shared entrypoint
+│       ├── helpers/
+│       │   └── commands.rego   # Shared helpers
 │       └── policies/
+│           ├── claude/         # Harness-specific policies
+│           ├── cursor/
+│           ├── opencode/
+│           └── factory/
 └── catalog.lock           # Version tracking
 ```
 
@@ -89,7 +97,9 @@ Your project policies can override catalog defaults. Global policies cannot be o
 Catalog policies use isolated namespaces to prevent conflicts:
 
 ```
-cupcake.catalog.security_hardened.policies.*
+cupcake.catalog.<rulebook_name>.policies.*   # Policy rules
+cupcake.catalog.<rulebook_name>.helpers.*    # Shared helpers
+cupcake.catalog.<rulebook_name>.system       # Aggregation entrypoint
 ```
 
 This means:

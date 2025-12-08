@@ -26,19 +26,25 @@ rulebooks/my-rulebook/
 ├── README.md                   # Required: Documentation
 ├── CHANGELOG.md                # Recommended: Version history
 ├── rulebook.yml                # Optional: Signals, actions, builtins
+├── system/
+│   └── evaluate.rego           # Required: Shared aggregation entrypoint
+├── helpers/                    # Optional: Shared helper functions
+│   └── *.rego
 └── policies/
     ├── claude/                 # Policies for Claude Code
-    │   ├── system/
-    │   │   └── evaluate.rego   # Required: Aggregation entrypoint
-    │   └── builtins/
-    │       └── *.rego          # Your policy files
+    │   └── *.rego              # Your policy files (flat structure)
     ├── cursor/                 # Policies for Cursor
-    │   └── ...
+    │   └── *.rego
     ├── opencode/               # Policies for OpenCode
-    │   └── ...
+    │   └── *.rego
     └── factory/                # Policies for Factory
-        └── ...
+        └── *.rego
 ```
+
+Key points:
+- `system/evaluate.rego` is at the **rulebook root** (shared across all harnesses)
+- `helpers/` contains shared Rego functions used by policies
+- Policy files go **directly** in `policies/<harness>/` (no `builtins/` subdirectory)
 
 ### Naming Rules
 
@@ -118,10 +124,10 @@ spec:
 
 ### The Aggregation Entrypoint
 
-Each harness needs a `system/evaluate.rego` file that aggregates decisions:
+Each rulebook needs a single `system/evaluate.rego` file at the **root level** that aggregates decisions across all harnesses:
 
 ```rego
-# policies/claude/system/evaluate.rego
+# system/evaluate.rego
 
 # METADATA
 # scope: package
@@ -159,10 +165,10 @@ default collect_verbs(_) := []
 
 ### Policy Files
 
-Individual policies go in `builtins/` or custom directories:
+Individual policies go **directly** in `policies/<harness>/`:
 
 ```rego
-# policies/claude/builtins/dangerous_commands.rego
+# policies/claude/dangerous_commands.rego
 
 # METADATA
 # scope: package
@@ -187,6 +193,34 @@ deny contains decision if {
         "reason": "Blocked dangerous recursive delete command",
         "severity": "CRITICAL",
     }
+}
+```
+
+### Helper Functions
+
+Shared helper functions go in `helpers/` at the rulebook root:
+
+```rego
+# helpers/commands.rego
+package cupcake.catalog.my_rulebook.helpers.commands
+
+import rego.v1
+
+# Check if command contains a specific verb
+has_verb(command, verb) if {
+    pattern := concat("", ["(^|\\s)", verb, "(\\s|$)"])
+    regex.match(pattern, command)
+}
+```
+
+Import helpers in your policies:
+
+```rego
+import data.cupcake.catalog.my_rulebook.helpers.commands
+
+deny contains decision if {
+    commands.has_verb(input.tool_input.command, "rm")
+    # ...
 }
 ```
 
@@ -218,14 +252,17 @@ decision := {
 
 ## Namespace Convention
 
-**All policies MUST use the namespace:**
+**All files MUST use these namespace patterns:**
 
-```
-cupcake.catalog.<rulebook_name>.policies.<policy_name>
-```
+| Directory | Namespace Pattern | Example |
+|-----------|-------------------|---------|
+| `policies/<harness>/` | `cupcake.catalog.<name>.policies.<policy>` | `cupcake.catalog.my_rulebook.policies.dangerous_commands` |
+| `helpers/` | `cupcake.catalog.<name>.helpers.<helper>` | `cupcake.catalog.my_rulebook.helpers.commands` |
+| `system/` | `cupcake.catalog.<name>.system` | `cupcake.catalog.my_rulebook.system` |
 
 For a rulebook named `my-rulebook`:
 - System: `cupcake.catalog.my_rulebook.system`
+- Helpers: `cupcake.catalog.my_rulebook.helpers.*`
 - Policies: `cupcake.catalog.my_rulebook.policies.*`
 
 **Note**: Use underscores in package names (Rego requirement), not hyphens.
@@ -260,9 +297,9 @@ The PR validation workflow checks:
 
 1. **Manifest schema** - Valid YAML, required fields present
 2. **Rego syntax** - All `.rego` files parse correctly
-3. **Namespace compliance** - Packages use `cupcake.catalog.<name>.*`
-4. **Harness directories** - Policies exist for declared harnesses
-5. **System entrypoint** - Each harness has `system/evaluate.rego`
+3. **Namespace compliance** - Packages use correct `cupcake.catalog.<name>.*` patterns
+4. **Harness directories** - Policy files exist for declared harnesses
+5. **System entrypoint** - `system/evaluate.rego` exists at rulebook root
 6. **Version bump** - Version increased from previous release
 
 ---
